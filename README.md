@@ -1,9 +1,20 @@
 # Contracts for the Endgame and MetaDAOs
 
-Includes:
+## Required Pregame Contracts
 
- * EtherDaiV1
- * MetaDAOToken
+### Maker Core
+
+ - [x] Ether Dai V1
+ - [x] Elixir V1 - Available as external balancer pool
+ - [ ] Metanomics V1
+ - [ ] Anti-Reflexivity Mechanic
+
+ ### MetaDAOs
+
+ - [x] MetaDAO Token
+ - [ ] MetaDAO Farms - TBD
+ - [ ] MetaDAO Frontend - TBD
+ - [x] Meta Elixir V1 - Available as external balancer pool
 
 ## EtherDai
 
