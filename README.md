@@ -14,7 +14,7 @@
  - [x] MetaDAO Token
  - [ ] MetaDAO Farms - TBD
  - [ ] MetaDAO Frontend - TBD
- - [x] Meta Elixir V1 - Available as external balancer pool
+ - [ ] Meta Elixir V1
 
 ## EtherDai
 
