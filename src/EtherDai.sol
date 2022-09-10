@@ -107,11 +107,6 @@ contract EtherDaiV1 {
     bytes32 private immutable _DOMAIN_SEPARATOR;
     bytes32 public constant PERMIT_TYPEHASH = keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)");
 
-    modifier auth {
-        require(wards[msg.sender] == 1, "EtherDai/not-authorized");
-        _;
-    }
-
     constructor(address _stETH) {
         wards[msg.sender] = 1;
         emit Rely(msg.sender);
@@ -136,17 +131,6 @@ contract EtherDaiV1 {
 
     function DOMAIN_SEPARATOR() external view returns (bytes32) {
         return block.chainid == deploymentChainId ? _DOMAIN_SEPARATOR : _calculateDomainSeparator(block.chainid);
-    }
-
-    // --- Administration ---
-    function rely(address usr) external auth {
-        wards[usr] = 1;
-        emit Rely(usr);
-    }
-
-    function deny(address usr) external auth {
-        wards[usr] = 0;
-        emit Deny(usr);
     }
 
     // --- ERC20 Mutations ---
