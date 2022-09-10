@@ -3,11 +3,11 @@ pragma solidity ^0.8.17;
 
 import "dss-test/DSSTest.sol";
 
-import { EtherDai } from "../src/EtherDai.sol";
+import { EtherDai } from "../EtherDai.sol";
 
-contract ContractTest is DSSTest {
+contract EtherDaiTest is DSSTest {
 
-    Dai token;
+    EtherDai token;
 
     event Transfer(address indexed from, address indexed to, uint256 amount);
     event Approval(address indexed owner, address indexed spender, uint256 amount);
@@ -18,7 +18,7 @@ contract ContractTest is DSSTest {
     function postSetup() internal virtual override {
         vm.expectEmit(true, true, true, true);
         emit Rely(address(this));
-        token = new Dai();
+        token = new EtherDai();
     }
 
     function testAuth() public {

@@ -16,12 +16,12 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 pragma solidity ^0.8.17;
 
-contract EtherEtherDai {
+contract EtherDai {
 
     mapping (address => uint256) public wards;
 
     // --- ERC20 Data ---
-    string  public constant name     = "Ether EtherDai";
+    string  public constant name     = "Ether Dai";
     string  public constant symbol   = "ETHD";
     string  public constant version  = "1";
     uint8   public constant decimals = 18;
