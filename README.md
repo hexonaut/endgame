@@ -30,7 +30,6 @@ Summary of required products in more detail: https://forum.makerdao.com/t/endgam
 
  - Add 1-sided liquidity to Meta Elixir Uniswap V2 pool from MKR
  - Add 1-sided liquidity to Elixir Balancer pool from DAI
- - Add 1-sided liquidity to Elixir Balancer pool from MKR
 
 ## EtherDai
 
