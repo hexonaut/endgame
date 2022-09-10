@@ -18,7 +18,7 @@ contract EtherDaiTest is DSSTest {
     function postSetup() internal virtual override {
         vm.expectEmit(true, true, true, true);
         emit Rely(address(this));
-        token = new EtherDai();
+        token = new EtherDai(address(0));
     }
 
     function testAuth() public {

@@ -16,6 +16,15 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 pragma solidity ^0.8.17;
 
+interface IERC20 {
+    function transfer(address recipient, uint256 amount) external returns (bool);
+    function transferFrom(
+        address sender,
+        address recipient,
+        uint256 amount
+    ) external returns (bool);
+}
+
 contract EtherDai {
 
     mapping (address => uint256) public wards;
@@ -30,6 +39,9 @@ contract EtherDai {
     mapping (address => uint256)                      public balanceOf;
     mapping (address => mapping (address => uint256)) public allowance;
     mapping (address => uint256)                      public nonces;
+
+    // --- Other Data ---
+    IERC20 public immutable stETH;
 
     // --- Events ---
     event Rely(address indexed usr);
@@ -47,12 +59,14 @@ contract EtherDai {
         _;
     }
 
-    constructor() {
+    constructor(address _stETH) {
         wards[msg.sender] = 1;
         emit Rely(msg.sender);
 
         deploymentChainId = block.chainid;
         _DOMAIN_SEPARATOR = _calculateDomainSeparator(block.chainid);
+
+        stETH = IERC20(_stETH);
     }
 
     function _calculateDomainSeparator(uint256 chainId) private view returns (bytes32) {
@@ -154,8 +168,21 @@ contract EtherDai {
         return true;
     }
 
+    // --- Deposit/Withdraw ---
+    function deposit(address to, uint256 value) external {
+        require(stETH.transferFrom(msg.sender, address(this), value), "EtherDai/transfer-failed");
+
+        mint(to, value);
+    }
+
+    function withdraw(address to, uint256 value) external {
+        burn(msg.sender, value);
+
+        require(stETH.transfer(to, value), "EtherDai/transfer-failed");
+    }
+
     // --- Mint/Burn ---
-    function mint(address to, uint256 value) external auth {
+    function mint(address to, uint256 value) public auth {
         require(to != address(0) && to != address(this), "EtherDai/invalid-address");
         unchecked {
             balanceOf[to] = balanceOf[to] + value; // note: we don't need an overflow check here b/c balanceOf[to] <= totalSupply and there is an overflow check below
@@ -165,7 +192,7 @@ contract EtherDai {
         emit Transfer(address(0), to, value);
     }
 
-    function burn(address from, uint256 value) external {
+    function burn(address from, uint256 value) public {
         uint256 balance = balanceOf[from];
         require(balance >= value, "EtherDai/insufficient-balance");
 
