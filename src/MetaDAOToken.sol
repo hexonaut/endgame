@@ -17,74 +17,13 @@
 
 pragma solidity ^0.8.17;
 
-interface IERC20 {
-    function transfer(address recipient, uint256 amount) external returns (bool);
-    function transferFrom(
-        address sender,
-        address recipient,
-        uint256 amount
-    ) external returns (bool);
-}
+contract MetaDAOToken {
 
-contract EtherDai {
-    address public implementation;
-    mapping (address => uint256) public wards;
-
-    event Rely(address indexed usr);
-    event Deny(address indexed usr);
-    event SetImplementation(address indexed);
-
-    modifier auth {
-        require(wards[msg.sender] == 1, "EtherDai/not-authorized");
-        _;
-    }
-
-    constructor() {
-        wards[msg.sender] = 1;
-        emit Rely(msg.sender);
-    }
-
-    function rely(address usr) external auth {
-        wards[usr] = 1;
-        emit Rely(usr);
-    }
-
-    function deny(address usr) external auth {
-        wards[usr] = 0;
-        emit Deny(usr);
-    }
-
-    function setImplementation(address implementation_) external auth {
-        implementation = implementation_;
-        emit SetImplementation(implementation_);
-    }
-
-    fallback() external {
-        address _impl = implementation;
-        require(_impl != address(0));
-
-        assembly {
-            let ptr := mload(0x40)
-            calldatacopy(ptr, 0, calldatasize())
-            let result := delegatecall(gas(), _impl, ptr, calldatasize(), 0, 0)
-            let size := returndatasize()
-            returndatacopy(ptr, 0, size)
-
-            switch result
-            case 0 { revert(ptr, size) }
-            default { return(ptr, size) }
-        }
-    }
-}
-
-contract EtherDaiV1 {
-
-    bytes32 slot0;
     mapping (address => uint256) public wards;
 
     // --- ERC20 Data ---
-    string  public constant name     = "Ether Dai";
-    string  public constant symbol   = "ETHD";
+    string  public constant name     = "MetaDAO Token";
+    string  public constant symbol   = "MDAO";
     string  public constant version  = "1";
     uint8   public constant decimals = 18;
     uint256 public totalSupply;
@@ -92,9 +31,6 @@ contract EtherDaiV1 {
     mapping (address => uint256)                      public balanceOf;
     mapping (address => mapping (address => uint256)) public allowance;
     mapping (address => uint256)                      public nonces;
-
-    // --- Other Data ---
-    IERC20 public immutable stETH;
 
     // --- Events ---
     event Rely(address indexed usr);
@@ -108,18 +44,16 @@ contract EtherDaiV1 {
     bytes32 public constant PERMIT_TYPEHASH = keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)");
 
     modifier auth {
-        require(wards[msg.sender] == 1, "EtherDai/not-authorized");
+        require(wards[msg.sender] == 1, "MetaDAOToken/not-authorized");
         _;
     }
 
-    constructor(address _stETH) {
+    constructor() {
         wards[msg.sender] = 1;
         emit Rely(msg.sender);
 
         deploymentChainId = block.chainid;
         _DOMAIN_SEPARATOR = _calculateDomainSeparator(block.chainid);
-
-        stETH = IERC20(_stETH);
     }
 
     function _calculateDomainSeparator(uint256 chainId) private view returns (bytes32) {
@@ -151,9 +85,9 @@ contract EtherDaiV1 {
 
     // --- ERC20 Mutations ---
     function transfer(address to, uint256 value) external returns (bool) {
-        require(to != address(0) && to != address(this), "EtherDai/invalid-address");
+        require(to != address(0) && to != address(this), "MetaDAOToken/invalid-address");
         uint256 balance = balanceOf[msg.sender];
-        require(balance >= value, "EtherDai/insufficient-balance");
+        require(balance >= value, "MetaDAOToken/insufficient-balance");
 
         unchecked {
             balanceOf[msg.sender] = balance - value;
@@ -166,14 +100,14 @@ contract EtherDaiV1 {
     }
 
     function transferFrom(address from, address to, uint256 value) external returns (bool) {
-        require(to != address(0) && to != address(this), "EtherDai/invalid-address");
+        require(to != address(0) && to != address(this), "MetaDAOToken/invalid-address");
         uint256 balance = balanceOf[from];
-        require(balance >= value, "EtherDai/insufficient-balance");
+        require(balance >= value, "MetaDAOToken/insufficient-balance");
 
         if (from != msg.sender) {
             uint256 allowed = allowance[from][msg.sender];
             if (allowed != type(uint256).max) {
-                require(allowed >= value, "EtherDai/insufficient-allowance");
+                require(allowed >= value, "MetaDAOToken/insufficient-allowance");
 
                 unchecked {
                     allowance[from][msg.sender] = allowed - value;
@@ -210,7 +144,7 @@ contract EtherDaiV1 {
 
     function decreaseAllowance(address spender, uint256 subtractedValue) external returns (bool) {
         uint256 allowed = allowance[msg.sender][spender];
-        require(allowed >= subtractedValue, "EtherDai/insufficient-allowance");
+        require(allowed >= subtractedValue, "MetaDAOToken/insufficient-allowance");
         unchecked{
             allowed = allowed - subtractedValue;
         }
@@ -221,10 +155,9 @@ contract EtherDaiV1 {
         return true;
     }
 
-    // --- Deposit/Withdraw ---
-    function deposit(address to, uint256 value) external {
-        require(to != address(0) && to != address(this), "EtherDai/invalid-address");
-        require(stETH.transferFrom(msg.sender, address(this), value), "EtherDai/transfer-failed");
+    // --- Mint/Burn ---
+    function mint(address to, uint256 value) external auth {
+        require(to != address(0) && to != address(this), "MetaDAOToken/invalid-address");
         unchecked {
             balanceOf[to] = balanceOf[to] + value; // note: we don't need an overflow check here b/c balanceOf[to] <= totalSupply and there is an overflow check below
         }
@@ -233,23 +166,32 @@ contract EtherDaiV1 {
         emit Transfer(address(0), to, value);
     }
 
-    function withdraw(address to, uint256 value) external {
-        uint256 balance = balanceOf[msg.sender];
-        require(balance >= value, "EtherDai/insufficient-balance");
+    function burn(address from, uint256 value) external {
+        uint256 balance = balanceOf[from];
+        require(balance >= value, "MetaDAOToken/insufficient-balance");
+
+        if (from != msg.sender) {
+            uint256 allowed = allowance[from][msg.sender];
+            if (allowed != type(uint256).max) {
+                require(allowed >= value, "MetaDAOToken/insufficient-allowance");
+
+                unchecked {
+                    allowance[from][msg.sender] = allowed - value;
+                }
+            }
+        }
 
         unchecked {
-            balanceOf[msg.sender] = balance - value; // note: we don't need overflow checks b/c require(balance >= value) and balance <= totalSupply
+            balanceOf[from] = balance - value; // note: we don't need overflow checks b/c require(balance >= value) and balance <= totalSupply
             totalSupply     = totalSupply - value;
         }
 
-        require(stETH.transfer(to, value), "EtherDai/transfer-failed");
-
-        emit Transfer(msg.sender, address(0), value);
+        emit Transfer(from, address(0), value);
     }
 
     // --- Approve by signature ---
     function permit(address owner, address spender, uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s) external {
-        require(block.timestamp <= deadline, "EtherDai/permit-expired");
+        require(block.timestamp <= deadline, "MetaDAOToken/permit-expired");
 
         uint256 nonce;
         unchecked { nonce = nonces[owner]++; }
@@ -268,7 +210,7 @@ contract EtherDaiV1 {
                 ))
             ));
 
-        require(owner != address(0) && owner == ecrecover(digest, v, r, s), "EtherDai/invalid-permit");
+        require(owner != address(0) && owner == ecrecover(digest, v, r, s), "MetaDAOToken/invalid-permit");
 
         allowance[owner][spender] = value;
         emit Approval(owner, spender, value);
