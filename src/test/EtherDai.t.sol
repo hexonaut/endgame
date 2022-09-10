@@ -3,11 +3,25 @@ pragma solidity ^0.8.17;
 
 import "dss-test/DSSTest.sol";
 
-import { EtherDai } from "../EtherDai.sol";
+import { EtherDai, EtherDaiV1 } from "../EtherDai.sol";
+
+contract MockToken {
+
+    function transfer(address, uint256) external pure returns (bool) {
+        return true;
+    }
+
+    function transferFrom(address, address, uint256) external pure returns (bool) {
+        return true;
+    }
+
+}
 
 contract EtherDaiTest is DSSTest {
 
-    EtherDai token;
+    MockToken stETH;
+
+    EtherDaiV1 token;
 
     event Transfer(address indexed from, address indexed to, uint256 amount);
     event Approval(address indexed owner, address indexed spender, uint256 amount);
@@ -16,9 +30,12 @@ contract EtherDaiTest is DSSTest {
         keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)");
 
     function postSetup() internal virtual override {
+        stETH = new MockToken();
+
         vm.expectEmit(true, true, true, true);
         emit Rely(address(this));
-        token = new EtherDai(address(0));
+        token = EtherDaiV1(address(new EtherDai()));
+        EtherDai(address(token)).setImplementation(address(new EtherDaiV1(address(stETH))));
     }
 
     function testAuth() public {
@@ -32,32 +49,31 @@ contract EtherDaiTest is DSSTest {
         assertEq(token.decimals(), 18);
     }
 
-    function testMint() public {
+    function testDeposit() public {
         vm.expectEmit(true, true, true, true);
         emit Transfer(address(0), address(0xBEEF), 1e18);
-        token.mint(address(0xBEEF), 1e18);
+        token.deposit(address(0xBEEF), 1e18);
 
         assertEq(token.totalSupply(), 1e18);
         assertEq(token.balanceOf(address(0xBEEF)), 1e18);
     }
 
-    function testMintBadAddress() public {
+    function testDepositBadAddress() public {
         vm.expectRevert("EtherDai/invalid-address");
-        token.mint(address(0), 1e18);
+        token.deposit(address(0), 1e18);
         vm.expectRevert("EtherDai/invalid-address");
-        token.mint(address(token), 1e18);
+        token.deposit(address(token), 1e18);
     }
 
-    function testBurn() public {
-        token.mint(address(0xBEEF), 1e18);
+    function testWithdraw() public {
+        token.deposit(address(this), 1e18);
 
         vm.expectEmit(true, true, true, true);
-        emit Transfer(address(0xBEEF), address(0), 0.9e18);
-        vm.prank(address(0xBEEF));
-        token.burn(address(0xBEEF), 0.9e18);
+        emit Transfer(address(this), address(0), 0.9e18);
+        token.withdraw(address(this), 0.9e18);
 
         assertEq(token.totalSupply(), 1e18 - 0.9e18);
-        assertEq(token.balanceOf(address(0xBEEF)), 0.1e18);
+        assertEq(token.balanceOf(address(this)), 0.1e18);
     }
 
     function testApprove() public {
@@ -92,7 +108,7 @@ contract EtherDaiTest is DSSTest {
     }
 
     function testTransfer() public {
-        token.mint(address(this), 1e18);
+        token.deposit(address(this), 1e18);
 
         vm.expectEmit(true, true, true, true);
         emit Transfer(address(this), address(0xBEEF), 1e18);
@@ -104,7 +120,7 @@ contract EtherDaiTest is DSSTest {
     }
 
     function testTransferBadAddress() public {
-        token.mint(address(this), 1e18);
+        token.deposit(address(this), 1e18);
 
         vm.expectRevert("EtherDai/invalid-address");
         token.transfer(address(0), 1e18);
@@ -115,7 +131,7 @@ contract EtherDaiTest is DSSTest {
     function testTransferFrom() public {
         address from = address(0xABCD);
 
-        token.mint(from, 1e18);
+        token.deposit(from, 1e18);
 
         vm.prank(from);
         token.approve(address(this), 1e18);
@@ -132,7 +148,7 @@ contract EtherDaiTest is DSSTest {
     }
 
     function testTransferFromBadAddress() public {
-        token.mint(address(this), 1e18);
+        token.deposit(address(this), 1e18);
         
         vm.expectRevert("EtherDai/invalid-address");
         token.transferFrom(address(this), address(0), 1e18);
@@ -143,7 +159,7 @@ contract EtherDaiTest is DSSTest {
     function testInfiniteApproveTransferFrom() public {
         address from = address(0xABCD);
 
-        token.mint(from, 1e18);
+        token.deposit(from, 1e18);
 
         vm.prank(from);
         vm.expectEmit(true, true, true, true);
@@ -185,7 +201,7 @@ contract EtherDaiTest is DSSTest {
     }
 
     function testTransferInsufficientBalance() public {
-        token.mint(address(this), 0.9e18);
+        token.deposit(address(this), 0.9e18);
         vm.expectRevert("EtherDai/insufficient-balance");
         token.transfer(address(0xBEEF), 1e18);
     }
@@ -193,7 +209,7 @@ contract EtherDaiTest is DSSTest {
     function testTransferFromInsufficientAllowance() public {
         address from = address(0xABCD);
 
-        token.mint(from, 1e18);
+        token.deposit(from, 1e18);
 
         vm.prank(from);
         token.approve(address(this), 0.9e18);
@@ -205,7 +221,7 @@ contract EtherDaiTest is DSSTest {
     function testTransferFromInsufficientBalance() public {
         address from = address(0xABCD);
 
-        token.mint(from, 0.9e18);
+        token.deposit(from, 0.9e18);
 
         vm.prank(from);
         token.approve(address(this), 1e18);
@@ -295,14 +311,14 @@ contract EtherDaiTest is DSSTest {
         token.permit(owner, address(0xCAFE), 1e18, block.timestamp, v, r, s);
     }
 
-    function testMint(address to, uint256 amount) public {
+    function testDeposit(address to, uint256 amount) public {
         if (to != address(0) && to != address(token)) {
             vm.expectEmit(true, true, true, true);
             emit Transfer(address(0), to, amount);
         } else {
             vm.expectRevert("EtherDai/invalid-address");
         }
-        token.mint(to, amount);
+        token.deposit(to, amount);
 
         if (to != address(0) && to != address(token)) {
             assertEq(token.totalSupply(), amount);
@@ -310,7 +326,7 @@ contract EtherDaiTest is DSSTest {
         }
     }
 
-    function testBurn(
+    function testWithdraw(
         address from,
         uint256 mintAmount,
         uint256 burnAmount
@@ -319,12 +335,12 @@ contract EtherDaiTest is DSSTest {
 
         burnAmount = bound(burnAmount, 0, mintAmount);
 
-        token.mint(from, mintAmount);
+        token.deposit(from, mintAmount);
 
         vm.expectEmit(true, true, true, true);
         emit Transfer(from, address(0), burnAmount);
         vm.prank(from);
-        token.burn(from, burnAmount);
+        token.withdraw(from, burnAmount);
 
         assertEq(token.totalSupply(), mintAmount - burnAmount);
         assertEq(token.balanceOf(from), mintAmount - burnAmount);
@@ -341,7 +357,7 @@ contract EtherDaiTest is DSSTest {
     function testTransfer(address to, uint256 amount) public {
         if (to == address(0) || to == address(token)) return;
 
-        token.mint(address(this), amount);
+        token.deposit(address(this), amount);
 
         vm.expectEmit(true, true, true, true);
         emit Transfer(address(this), to, amount);
@@ -367,7 +383,7 @@ contract EtherDaiTest is DSSTest {
 
         address from = address(0xABCD);
 
-        token.mint(from, amount);
+        token.deposit(from, amount);
 
         vm.prank(from);
         token.approve(address(this), approval);
@@ -429,9 +445,9 @@ contract EtherDaiTest is DSSTest {
         if (mintAmount == type(uint256).max) mintAmount -= 1;
         burnAmount = bound(burnAmount, mintAmount + 1, type(uint256).max);
 
-        token.mint(to, mintAmount);
+        token.deposit(to, mintAmount);
         vm.expectRevert("EtherDai/insufficient-balance");
-        token.burn(to, burnAmount);
+        token.withdraw(to, burnAmount);
     }
 
     function testTransferInsufficientBalance(
@@ -444,7 +460,7 @@ contract EtherDaiTest is DSSTest {
         if (mintAmount == type(uint256).max) mintAmount -= 1;
         sendAmount = bound(sendAmount, mintAmount + 1, type(uint256).max);
 
-        token.mint(address(this), mintAmount);
+        token.deposit(address(this), mintAmount);
         vm.expectRevert("EtherDai/insufficient-balance");
         token.transfer(to, sendAmount);
     }
@@ -461,7 +477,7 @@ contract EtherDaiTest is DSSTest {
 
         address from = address(0xABCD);
 
-        token.mint(from, amount);
+        token.deposit(from, amount);
 
         vm.prank(from);
         token.approve(address(this), approval);
@@ -482,7 +498,7 @@ contract EtherDaiTest is DSSTest {
 
         address from = address(0xABCD);
 
-        token.mint(from, mintAmount);
+        token.deposit(from, mintAmount);
 
         vm.prank(from);
         token.approve(address(this), sendAmount);

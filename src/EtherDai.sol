@@ -26,7 +26,59 @@ interface IERC20 {
 }
 
 contract EtherDai {
+    address public implementation;
+    mapping (address => uint256) public wards;
 
+    event Rely(address indexed usr);
+    event Deny(address indexed usr);
+    event SetImplementation(address indexed);
+
+    modifier auth {
+        require(wards[msg.sender] == 1, "EtherDai/not-authorized");
+        _;
+    }
+
+    constructor() {
+        wards[msg.sender] = 1;
+        emit Rely(msg.sender);
+    }
+
+    function rely(address usr) external auth {
+        wards[usr] = 1;
+        emit Rely(usr);
+    }
+
+    function deny(address usr) external auth {
+        wards[usr] = 0;
+        emit Deny(usr);
+    }
+
+    function setImplementation(address implementation_) external auth {
+        implementation = implementation_;
+        emit SetImplementation(implementation_);
+    }
+
+    fallback() external {
+        address _impl = implementation;
+        require(_impl != address(0));
+
+        assembly {
+            let ptr := mload(0x40)
+            calldatacopy(ptr, 0, calldatasize())
+            let result := delegatecall(gas(), _impl, ptr, calldatasize(), 0, 0)
+            let size := returndatasize()
+            returndatacopy(ptr, 0, size)
+
+            switch result
+            case 0 { revert(ptr, size) }
+            default { return(ptr, size) }
+        }
+    }
+}
+
+contract EtherDaiV1 {
+
+    bytes32 slot0;
     mapping (address => uint256) public wards;
 
     // --- ERC20 Data ---
@@ -170,20 +222,8 @@ contract EtherDai {
 
     // --- Deposit/Withdraw ---
     function deposit(address to, uint256 value) external {
-        require(stETH.transferFrom(msg.sender, address(this), value), "EtherDai/transfer-failed");
-
-        mint(to, value);
-    }
-
-    function withdraw(address to, uint256 value) external {
-        burn(msg.sender, value);
-
-        require(stETH.transfer(to, value), "EtherDai/transfer-failed");
-    }
-
-    // --- Mint/Burn ---
-    function mint(address to, uint256 value) public auth {
         require(to != address(0) && to != address(this), "EtherDai/invalid-address");
+        require(stETH.transferFrom(msg.sender, address(this), value), "EtherDai/transfer-failed");
         unchecked {
             balanceOf[to] = balanceOf[to] + value; // note: we don't need an overflow check here b/c balanceOf[to] <= totalSupply and there is an overflow check below
         }
@@ -192,27 +232,18 @@ contract EtherDai {
         emit Transfer(address(0), to, value);
     }
 
-    function burn(address from, uint256 value) public {
-        uint256 balance = balanceOf[from];
+    function withdraw(address to, uint256 value) external {
+        uint256 balance = balanceOf[msg.sender];
         require(balance >= value, "EtherDai/insufficient-balance");
 
-        if (from != msg.sender) {
-            uint256 allowed = allowance[from][msg.sender];
-            if (allowed != type(uint256).max) {
-                require(allowed >= value, "EtherDai/insufficient-allowance");
-
-                unchecked {
-                    allowance[from][msg.sender] = allowed - value;
-                }
-            }
-        }
-
         unchecked {
-            balanceOf[from] = balance - value; // note: we don't need overflow checks b/c require(balance >= value) and balance <= totalSupply
+            balanceOf[msg.sender] = balance - value; // note: we don't need overflow checks b/c require(balance >= value) and balance <= totalSupply
             totalSupply     = totalSupply - value;
         }
 
-        emit Transfer(from, address(0), value);
+        require(stETH.transfer(to, value), "EtherDai/transfer-failed");
+
+        emit Transfer(msg.sender, address(0), value);
     }
 
     // --- Approve by signature ---
